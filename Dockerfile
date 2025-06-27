@@ -15,6 +15,7 @@ USER root
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     postgresql \
+    procps \
     redis-server \
     sudo \
     libpq-dev \

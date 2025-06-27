@@ -43,7 +43,7 @@ docker-run:: ## Runs the docker image
 docker-exec-shell:: ## Executes a shell in running container
 		@docker exec \
 			-it \
-				airflow-aio /bin/sh
+				airflow-aio /bin/bash
 
 docker-run-shell:: ## Runs the docker image with bash as entrypoint
 		@docker run \
