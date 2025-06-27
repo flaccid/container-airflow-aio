@@ -103,8 +103,6 @@ airflow config get-value database sql_alchemy_conn
 #     --email "${AIRFLOW_EMAIL}" \
 #     -p "${AIRFLOW_PASSWORD}" || echo "User '${AIRFLOW_USER}' already exists."
 
-# --- 7. START AIRFLOW SERVICES ---
-# Start the scheduler and worker as background processes.
 echo "Starting Airflow scheduler..."
 airflow scheduler &
 
@@ -117,8 +115,5 @@ airflow triggerer &
 echo "Starting Airflow DAG processor..."
 airflow dag-processor > /tmp/dag-processor &
 
-# Start the webserver in the foreground.
-# 'exec' replaces the current shell process with the webserver process,
-# ensuring it becomes the main container process (PID 1) and that signals are handled correctly.
-echo "Starting Airflow webserver..."
-exec airflow api-server
+echo "Starting Airflow API server..."
+exec airflow api-server --proxy-headers
