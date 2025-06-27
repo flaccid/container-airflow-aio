@@ -3,6 +3,7 @@ FROM apache/airflow:${AIRFLOW_VERSION}-python3.12
 LABEL maintainer="Chris Fordham <chris@fordham.id.au>"
 LABEL warning="This is an all-in-one image designed for local development and testing ONLY. DO NOT use it in a production environment."
 COPY container-entrypoint.sh /usr/local/bin/container-entrypoint.sh
+ENV AIRFLOW__API__EXPOSE_CONFIG=True
 ENV AIRFLOW_HOME=/opt/airflow
 ENV AIRFLOW__CORE__EXECUTOR=CeleryExecutor
 ENV AIRFLOW__CORE__LOAD_EXAMPLES=true

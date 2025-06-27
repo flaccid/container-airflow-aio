@@ -38,6 +38,7 @@ docker-run:: ## Runs the docker image
 			-it \
 			--rm \
 			-p 8080:8080 \
+			$(OPTS) \
 				$(IMAGE_TAG) $(ARGS)
 
 docker-exec-shell:: ## Executes a shell in running container
