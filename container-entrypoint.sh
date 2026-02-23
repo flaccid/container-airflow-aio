@@ -112,12 +112,12 @@ fi
 export AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=${AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX:-True}
 # AIRFLOW__WEBSERVER__BASE_URL is used by the UI to set the <base href> tag.
 # If running behind a proxy with a subpath, set this to the full external URL.
-# Ensure no trailing slash to avoid double-slash issues in asset paths.
-export AIRFLOW__WEBSERVER__BASE_URL=$(echo "${AIRFLOW__WEBSERVER__BASE_URL:-http://localhost:8080}" | sed 's|/$||')
+# Ensure it ends with a slash for correct relative asset resolution.
+export AIRFLOW__WEBSERVER__BASE_URL=$(echo "${AIRFLOW__WEBSERVER__BASE_URL:-http://localhost:8080}" | sed 's|/*$|/|')
 # AIRFLOW__API__BASE_URL is used by components to reach the API server.
 # In Airflow 3, this also determines the root_path for the FastAPI application.
 export AIRFLOW__API__BASE_URL=${AIRFLOW__API__BASE_URL:-$AIRFLOW__WEBSERVER__BASE_URL}
-export AIRFLOW__API__BASE_URL=$(echo "$AIRFLOW__API__BASE_URL" | sed 's|/$||')
+export AIRFLOW__API__BASE_URL=$(echo "$AIRFLOW__API__BASE_URL" | sed 's|/*$|/|')
 
 echo "Starting Airflow scheduler..."
 airflow scheduler &
