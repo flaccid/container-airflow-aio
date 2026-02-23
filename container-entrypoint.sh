@@ -120,16 +120,16 @@ echo "Applying subpath patch to Airflow source..."
 AIRFLOW_SITE_PACKAGES=$(python3 -c "import airflow; import os; print(os.path.dirname(airflow.__file__))" 2>/dev/null || echo "/home/airflow/.local/lib/python3.13/site-packages/airflow")
 UI_BASE_PATH=$(python3 -c "from urllib.parse import urlsplit; print(urlsplit('${AIRFLOW__WEBSERVER__BASE_URL}').path)" 2>/dev/null || echo "/")
 
-# Patch API_ROOT_PATH in app.py to ensure URL generation (redirects, etc.) uses the full subpath
-# but since we set AIRFLOW__API__BASE_URL="/", the FastAPI(root_path=...) will be "".
-sed -i "s|^API_ROOT_PATH = .*|API_ROOT_PATH = \"${UI_BASE_PATH}\"|g" \
+# Patch AUTH_MANAGER_FASTAPI_APP_PREFIX specifically to ensure redirects use the subpath.
+# We DO NOT patch API_ROOT_PATH directly as it affects the FastAPI root_path/router.
+sed -i "s|^AUTH_MANAGER_FASTAPI_APP_PREFIX = .*|AUTH_MANAGER_FASTAPI_APP_PREFIX = \"${UI_BASE_PATH}auth\"|g" \
     "${AIRFLOW_SITE_PACKAGES}/api_fastapi/app.py"
 
-# Also ensure the UI template uses this path
+# Patch Core UI template to use the full subpath for <base href>
 sed -i "s|\"backend_server_base_url\": request.base_url.path|\"backend_server_base_url\": \"${UI_BASE_PATH}\"|g" \
     "${AIRFLOW_SITE_PACKAGES}/api_fastapi/core_api/app.py"
 
-# Patch SimpleAuthManager Login UI
+# Patch SimpleAuthManager Login UI template
 sed -i "s|\"backend_server_base_url\": request.base_url.path|\"backend_server_base_url\": \"${UI_BASE_PATH}\"|g" \
     "${AIRFLOW_SITE_PACKAGES}/api_fastapi/auth/managers/simple/simple_auth_manager.py"
 
