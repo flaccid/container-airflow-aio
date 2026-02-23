@@ -108,8 +108,10 @@ if [ ! -f "${AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE}" ]; then
 fi
 
 # Proxy and Base URL configuration
-# Enable ProxyFix to handle X-Forwarded-* headers correctly
-export AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=${AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX:-True}
+# Explicitly disable ProxyFix. This is enabled by default in Airflow 3 and might be
+# incorrectly prepending a prefix due to misconfigured X-Forwarded-* headers in complex proxy chains.
+# We will rely on explicit subpath patching instead.
+export AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=False
 # AIRFLOW__WEBSERVER__BASE_URL is used by the UI to set the <base href> tag.
 export AIRFLOW__WEBSERVER__BASE_URL=$(echo "${AIRFLOW__WEBSERVER__BASE_URL:-http://localhost:8080}" | sed 's|/*$|/|')
 # AIRFLOW__API__BASE_URL: for Airflow 3 behind a stripping proxy, we MUST set this to /
