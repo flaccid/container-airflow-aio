@@ -118,6 +118,12 @@ export AIRFLOW__WEBSERVER__BASE_URL=$(echo "${AIRFLOW__WEBSERVER__BASE_URL:-http
 # so that the backend routing doesn't expect the subpath prefix in incoming requests.
 export AIRFLOW__API__BASE_URL="/"
 
+# --- JWT Authentication Configuration ---
+# Fixes "JWT token is not valid: The specified alg value is not allowed"
+# For simple local development, use a consistent symmetric key and algorithm.
+export AIRFLOW__API_AUTH__JWT_ALGORITHM="HS256"
+export AIRFLOW__API_AUTH__JWT_SECRET_KEY="your-super-secret-jwt-key-for-dev"
+
 echo "Applying subpath patch to Airflow source..."
 AIRFLOW_SITE_PACKAGES=$(python3 -c "import airflow; import os; print(os.path.dirname(airflow.__file__))" 2>/dev/null || echo "/home/airflow/.local/lib/python3.13/site-packages/airflow")
 UI_BASE_PATH=$(python3 -c "from urllib.parse import urlsplit; print(urlsplit('${AIRFLOW__WEBSERVER__BASE_URL}').path)" 2>/dev/null || echo "/")
