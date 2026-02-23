@@ -13,8 +13,10 @@ export AIRFLOW_EMAIL=${AIRFLOW_EMAIL:-airflow@example.com}
 export POSTGRES_USER=${POSTGRES_USER:-airflow}
 export POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-airflow}
 export POSTGRES_DB=${POSTGRES_DB:-airflow}
-# PostgreSQL data directory for version 17 (default in Debian Bookworm)
-export POSTGRES_DIR=/var/lib/postgresql/17/main
+# PostgreSQL version in the image
+export POSTGRES_VERSION=18
+# PostgreSQL data directory
+export POSTGRES_DIR=/var/lib/postgresql/${POSTGRES_VERSION}/main
 
 # --- 2. CONFIGURE AIRFLOW CONNECTIONS ---
 # Set the environment variables that Airflow will use to connect to the database and broker.
@@ -35,15 +37,15 @@ if [ ! -d "$POSTGRES_DIR" ]; then
     echo "PostgreSQL data directory not found. Initializing a new cluster..."
     # Create and set permissions for the data directory.
     # We must use 'sudo' because the 'airflow' user does not own these directories.
-    sudo mkdir -p /var/lib/postgresql/17/main
+    sudo mkdir -p "/var/lib/postgresql/${POSTGRES_VERSION}/main"
     sudo chown -R postgres:postgres /var/lib/postgresql
     # Initialize the database cluster as the 'postgres' user.
-    sudo -u postgres /usr/lib/postgresql/17/bin/initdb -D $POSTGRES_DIR
+    sudo -u postgres "/usr/lib/postgresql/${POSTGRES_VERSION}/bin/initdb" -D $POSTGRES_DIR
 fi
 
 echo "Starting PostgreSQL server..."
 # Start the PostgreSQL server in the background as the 'postgres' user.
-if ! sudo -u postgres pg_ctlcluster 17 main start; then
+if ! sudo -u postgres pg_ctlcluster ${POSTGRES_VERSION} main start; then
     # sudo cat /var/log/postgresql/logfile
     echo 'FAIL, dropping to shell...'
     exec /bin/bash
@@ -87,21 +89,26 @@ until redis-cli ping > /dev/null 2>&1; do
 done
 echo "Redis is ready."
 
-# --- 6. INITIALIZE AIRFLOW DATABASE AND CREATE ADMIN USER ---
+# --- 6. INITIALIZE AIRFLOW DATABASE AND CONFIGURE AUTHENTICATION ---
 echo "Initializing Airflow metadata database..."
 # https://airflow.apache.org/docs/apache-airflow/stable/howto/set-up-database.html#initialize-the-database
 airflow db migrate
 airflow config get-value database sql_alchemy_conn
 
-# echo "Creating Airflow admin user..."
-# # Create the user, or ignore the error if the user already exists.
-# airflow users create \
-#     --username "${AIRFLOW_USER}" \
-#     --firstname Airflow \
-#     --lastname Admin \
-#     --role Admin \
-#     --email "${AIRFLOW_EMAIL}" \
-#     -p "${AIRFLOW_PASSWORD}" || echo "User '${AIRFLOW_USER}' already exists."
+echo "Configuring Airflow authentication (SimpleAuthManager)..."
+# In Airflow 3, SimpleAuthManager is the default for simple user management.
+export AIRFLOW__CORE__AUTH_MANAGER="airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager"
+export AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS="${AIRFLOW_USER}:admin"
+export AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE="${AIRFLOW_HOME}/simple_auth_manager_passwords.json"
+
+# Create the passwords file with the specified password if it doesn't exist.
+if [ ! -f "${AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE}" ]; then
+    echo "{\"${AIRFLOW_USER}\": \"${AIRFLOW_PASSWORD}\"}" > "${AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE}"
+    echo "User '${AIRFLOW_USER}' configured with password from AIRFLOW_PASSWORD."
+fi
+
+# Ensure components can reach the API server
+export AIRFLOW__API__BASE_URL="http://localhost:8080"
 
 echo "Starting Airflow scheduler..."
 airflow scheduler &
