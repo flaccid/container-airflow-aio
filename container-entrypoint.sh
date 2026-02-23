@@ -116,13 +116,16 @@ export AIRFLOW__WEBSERVER__BASE_URL=$(echo "${AIRFLOW__WEBSERVER__BASE_URL:-http
 # so that the backend routing doesn't expect the subpath prefix in incoming requests.
 export AIRFLOW__API__BASE_URL="/"
 
-echo "Applying subpath patch to Airflow UI templates..."
-# We patch the FastAPI app to use the webserver base URL path for the UI base href
-# instead of the request base URL path (which would be / since the proxy strips it).
+echo "Applying subpath patch to Airflow source..."
 AIRFLOW_SITE_PACKAGES=$(python3 -c "import airflow; import os; print(os.path.dirname(airflow.__file__))" 2>/dev/null || echo "/home/airflow/.local/lib/python3.13/site-packages/airflow")
 UI_BASE_PATH=$(python3 -c "from urllib.parse import urlsplit; print(urlsplit('${AIRFLOW__WEBSERVER__BASE_URL}').path)" 2>/dev/null || echo "/")
 
-# Patch Core UI
+# Patch API_ROOT_PATH in app.py to ensure URL generation (redirects, etc.) uses the full subpath
+# but since we set AIRFLOW__API__BASE_URL="/", the FastAPI(root_path=...) will be "".
+sed -i "s|^API_ROOT_PATH = .*|API_ROOT_PATH = \"${UI_BASE_PATH}\"|g" \
+    "${AIRFLOW_SITE_PACKAGES}/api_fastapi/app.py"
+
+# Also ensure the UI template uses this path
 sed -i "s|\"backend_server_base_url\": request.base_url.path|\"backend_server_base_url\": \"${UI_BASE_PATH}\"|g" \
     "${AIRFLOW_SITE_PACKAGES}/api_fastapi/core_api/app.py"
 
