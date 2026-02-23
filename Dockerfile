@@ -1,4 +1,4 @@
-ARG AIRFLOW_VERSION=3.0.2
+ARG AIRFLOW_VERSION=3.1.7
 FROM apache/airflow:${AIRFLOW_VERSION}-python3.12
 LABEL maintainer="Chris Fordham <chris@fordham.id.au>"
 LABEL warning="This is an all-in-one image designed for local development and testing ONLY. DO NOT use it in a production environment."
