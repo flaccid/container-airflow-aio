@@ -144,17 +144,6 @@ sed -i "s|\"backend_server_base_url\": request.base_url.path|\"backend_server_ba
 sed -i "s|\"backend_server_base_url\": request.base_url.path|\"backend_server_base_url\": \"${UI_BASE_PATH}\"|g" \
     "${AIRFLOW_SITE_PACKAGES}/api_fastapi/auth/managers/simple/simple_auth_manager.py"
 
-# --- DEBUG PATCH: Log redirect URL in public/auth.py ---
-sed -i "/def login(request: Request, next: None | str = None) -> RedirectResponse:/a \\    import logging\n    log = logging.getLogger(__name__)\n    log.info(f\"DEBUG: [public/auth.py] Redirecting to login_url: {login_url}\")" \
-    "${AIRFLOW_SITE_PACKAGES}/api_fastapi/core_api/routes/public/auth.py"
-
-sed -i "/def logout(request: Request) -> RedirectResponse:/a \\    import logging\n    log = logging.getLogger(__name__)\n    log.info(f\"DEBUG: [public/auth.py] Redirecting to logout_url: {logout_url}\")" \
-    "${AIRFLOW_SITE_PACKAGES}/api_fastapi/core_api/routes/public/auth.py"
-
-# --- DEBUG PATCH: Log redirect URL in simple/routes/login.py ---
-sed -i "/def login_all_admins(request: Request) -> RedirectResponse:/a \\    import logging\n    log = logging.getLogger(__name__)\n    log.info(f\"DEBUG: [simple/routes/login.py] Redirecting to url: {url}\")" \
-    "${AIRFLOW_SITE_PACKAGES}/api_fastapi/auth/managers/simple/routes/login.py"
-
 echo "Starting Airflow scheduler..."
 airflow scheduler &
 
