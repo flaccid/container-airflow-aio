@@ -114,7 +114,8 @@ export AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=${AIRFLOW__WEBSERVER__ENABLE_PROXY_F
 # If running behind a proxy with a subpath, set this to the full external URL.
 export AIRFLOW__WEBSERVER__BASE_URL=${AIRFLOW__WEBSERVER__BASE_URL:-http://localhost:8080}
 # AIRFLOW__API__BASE_URL is used by components to reach the API server.
-export AIRFLOW__API__BASE_URL=${AIRFLOW__API__BASE_URL:-http://localhost:8080}
+# In Airflow 3, this also determines the root_path for the FastAPI application.
+export AIRFLOW__API__BASE_URL=${AIRFLOW__API__BASE_URL:-$AIRFLOW__WEBSERVER__BASE_URL}
 
 echo "Starting Airflow scheduler..."
 airflow scheduler &
