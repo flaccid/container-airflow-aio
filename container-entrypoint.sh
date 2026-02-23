@@ -135,6 +135,10 @@ sed -i "s|\"backend_server_base_url\": request.base_url.path|\"backend_server_ba
 sed -i "s|\"backend_server_base_url\": request.base_url.path|\"backend_server_base_url\": \"${UI_BASE_PATH}\"|g" \
     "${AIRFLOW_SITE_PACKAGES}/api_fastapi/auth/managers/simple/simple_auth_manager.py"
 
+# --- DEBUG PATCH: Log redirect URL ---
+sed -i "/def login(request: Request, next: None | str = None) -> RedirectResponse:/a \\    import logging\n    log = logging.getLogger(__name__)\n    log.info(f\"DEBUG: Redirecting to login_url: {login_url}\")" \
+    "${AIRFLOW_SITE_PACKAGES}/api_fastapi/core_api/routes/public/auth.py"
+
 echo "Starting Airflow scheduler..."
 airflow scheduler &
 
