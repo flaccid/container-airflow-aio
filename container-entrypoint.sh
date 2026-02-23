@@ -111,13 +111,24 @@ fi
 # Enable ProxyFix to handle X-Forwarded-* headers correctly
 export AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=${AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX:-True}
 # AIRFLOW__WEBSERVER__BASE_URL is used by the UI to set the <base href> tag.
-# If running behind a proxy with a subpath, set this to the full external URL.
-# Ensure it ends with a slash for correct relative asset resolution.
 export AIRFLOW__WEBSERVER__BASE_URL=$(echo "${AIRFLOW__WEBSERVER__BASE_URL:-http://localhost:8080}" | sed 's|/*$|/|')
-# AIRFLOW__API__BASE_URL is used by components to reach the API server.
-# In Airflow 3, this also determines the root_path for the FastAPI application.
-export AIRFLOW__API__BASE_URL=${AIRFLOW__API__BASE_URL:-$AIRFLOW__WEBSERVER__BASE_URL}
-export AIRFLOW__API__BASE_URL=$(echo "$AIRFLOW__API__BASE_URL" | sed 's|/*$|/|')
+# AIRFLOW__API__BASE_URL: for Airflow 3 behind a stripping proxy, we MUST set this to /
+# so that the backend routing doesn't expect the subpath prefix in incoming requests.
+export AIRFLOW__API__BASE_URL="/"
+
+echo "Applying subpath patch to Airflow UI templates..."
+# We patch the FastAPI app to use the webserver base URL path for the UI base href
+# instead of the request base URL path (which would be / since the proxy strips it).
+AIRFLOW_SITE_PACKAGES=$(python3 -c "import airflow; import os; print(os.path.dirname(airflow.__file__))" 2>/dev/null || echo "/home/airflow/.local/lib/python3.13/site-packages/airflow")
+UI_BASE_PATH=$(python3 -c "from urllib.parse import urlsplit; print(urlsplit('${AIRFLOW__WEBSERVER__BASE_URL}').path)" 2>/dev/null || echo "/")
+
+# Patch Core UI
+sed -i "s|\"backend_server_base_url\": request.base_url.path|\"backend_server_base_url\": \"${UI_BASE_PATH}\"|g" \
+    "${AIRFLOW_SITE_PACKAGES}/api_fastapi/core_api/app.py"
+
+# Patch SimpleAuthManager Login UI
+sed -i "s|\"backend_server_base_url\": request.base_url.path|\"backend_server_base_url\": \"${UI_BASE_PATH}\"|g" \
+    "${AIRFLOW_SITE_PACKAGES}/api_fastapi/auth/managers/simple/simple_auth_manager.py"
 
 echo "Starting Airflow scheduler..."
 airflow scheduler &
