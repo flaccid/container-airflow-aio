@@ -120,7 +120,10 @@ export AIRFLOW__API__BASE_URL="/"
 
 # --- JWT Authentication Configuration ---
 # Fixes "JWT token is not valid: The specified alg value is not allowed"
-# For simple local development, use a consistent symmetric key and algorithm.
+# For simple local development, use consistent symmetric keys and algorithm.
+# API secret key used for internal API signing (e.g. JWTRefreshMiddleware)
+export AIRFLOW__API__SECRET_KEY="your-super-secret-api-key-for-dev"
+# JWT secret key used for user JWTs
 export AIRFLOW__API_AUTH__JWT_ALGORITHM="HS256"
 export AIRFLOW__API_AUTH__JWT_SECRET_KEY="your-super-secret-jwt-key-for-dev"
 
