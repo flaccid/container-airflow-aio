@@ -108,14 +108,13 @@ if [ ! -f "${AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE}" ]; then
 fi
 
 # Proxy and Base URL configuration
-# Explicitly disable ProxyFix. This is enabled by default in Airflow 3 and might be
-# incorrectly prepending a prefix due to misconfigured X-Forwarded-* headers in complex proxy chains.
-# We will rely on explicit subpath patching instead.
-export AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=False
+# Re-enable ProxyFix to rely on X-Forwarded-* headers from the proxy chain.
+export AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=True
 # AIRFLOW__WEBSERVER__BASE_URL is used by the UI to set the <base href> tag.
-export AIRFLOW__WEBSERVER__BASE_URL=$(echo "${AIRFLOW__WEBSERVER__BASE_URL:-http://localhost:8080}" | sed 's|/*$|/|')
-# AIRFLOW__API__BASE_URL: for Airflow 3 behind a stripping proxy, we MUST set this to /
-# so that the backend routing doesn't expect the subpath prefix in incoming requests.
+# We will rely on X-Forwarded-Prefix being passed to Airflow via Istio/KubeFlow.
+export AIRFLOW__WEBSERVER__BASE_URL=${AIRFLOW__WEBSERVER__BASE_URL:-http://localhost:8080}
+# AIRFLOW__API__BASE_URL: for Airflow 3, this also determines the root_path for the FastAPI application.
+# Set it to the internal root, as X-Forwarded-Prefix should handle the external path.
 export AIRFLOW__API__BASE_URL="/"
 
 # --- JWT Authentication Configuration ---
@@ -126,23 +125,6 @@ export AIRFLOW__API__SECRET_KEY="your-super-secret-api-key-for-dev"
 # JWT secret key used for user JWTs
 export AIRFLOW__API_AUTH__JWT_ALGORITHM="HS256"
 export AIRFLOW__API_AUTH__JWT_SECRET_KEY="your-super-secret-jwt-key-for-dev"
-
-echo "Applying subpath patch to Airflow source..."
-AIRFLOW_SITE_PACKAGES=$(python3 -c "import airflow; import os; print(os.path.dirname(airflow.__file__))" 2>/dev/null || echo "/home/airflow/.local/lib/python3.13/site-packages/airflow")
-UI_BASE_PATH=$(python3 -c "from urllib.parse import urlsplit; print(urlsplit('${AIRFLOW__WEBSERVER__BASE_URL}').path)" 2>/dev/null || echo "/")
-
-# Patch AUTH_MANAGER_FASTAPI_APP_PREFIX specifically to ensure redirects use the subpath.
-# We DO NOT patch API_ROOT_PATH directly as it affects the FastAPI root_path/router.
-sed -i "s|^AUTH_MANAGER_FASTAPI_APP_PREFIX = .*|AUTH_MANAGER_FASTAPI_APP_PREFIX = \"${UI_BASE_PATH}auth\"|g" \
-    "${AIRFLOW_SITE_PACKAGES}/api_fastapi/app.py"
-
-# Patch Core UI template to use the full subpath for <base href>
-sed -i "s|\"backend_server_base_url\": request.base_url.path|\"backend_server_base_url\": \"${UI_BASE_PATH}\"|g" \
-    "${AIRFLOW_SITE_PACKAGES}/api_fastapi/core_api/app.py"
-
-# Patch SimpleAuthManager Login UI template
-sed -i "s|\"backend_server_base_url\": request.base_url.path|\"backend_server_base_url\": \"${UI_BASE_PATH}\"|g" \
-    "${AIRFLOW_SITE_PACKAGES}/api_fastapi/auth/managers/simple/simple_auth_manager.py"
 
 echo "Starting Airflow scheduler..."
 airflow scheduler &
