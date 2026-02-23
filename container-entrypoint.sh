@@ -107,8 +107,14 @@ if [ ! -f "${AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE}" ]; then
     echo "User '${AIRFLOW_USER}' configured with password from AIRFLOW_PASSWORD."
 fi
 
-# Ensure components can reach the API server
-export AIRFLOW__API__BASE_URL="http://localhost:8080"
+# Proxy and Base URL configuration
+# Enable ProxyFix to handle X-Forwarded-* headers correctly
+export AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=${AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX:-True}
+# AIRFLOW__WEBSERVER__BASE_URL is used by the UI to set the <base href> tag.
+# If running behind a proxy with a subpath, set this to the full external URL.
+export AIRFLOW__WEBSERVER__BASE_URL=${AIRFLOW__WEBSERVER__BASE_URL:-http://localhost:8080}
+# AIRFLOW__API__BASE_URL is used by components to reach the API server.
+export AIRFLOW__API__BASE_URL=${AIRFLOW__API__BASE_URL:-http://localhost:8080}
 
 echo "Starting Airflow scheduler..."
 airflow scheduler &
