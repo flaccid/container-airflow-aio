@@ -126,6 +126,12 @@ export AIRFLOW__API__SECRET_KEY="your-super-secret-api-key-for-dev"
 export AIRFLOW__API_AUTH__JWT_ALGORITHM="HS256"
 export AIRFLOW__API_AUTH__JWT_SECRET_KEY="your-super-secret-jwt-key-for-dev"
 
+echo "Applying JWT debug patch to Airflow configuration..."
+AIRFLOW_SITE_PACKAGES=$(python3 -c "import airflow; import os; print(os.path.dirname(airflow.__file__))" 2>/dev/null || echo "/home/airflow/.local/lib/python3.13/site-packages/airflow")
+
+sed -i "/def get(self, section: str, key: str, *, fallback: T = settings.SENTRY_DSN_SENTINEL, var_name: str | None = None, suppress_warnings: bool = False) -> T:/a \\        if section == \"api_auth\" and key == \"jwt_algorithm\":\\n            import logging\\n            log = logging.getLogger(__name__)\\n            log.info(f\"DEBUG: [AIRFLOW_CONF] jwt_algorithm: {self.get_raw(section, key)}\")\\n        if section == \"api_auth\" and key == \"jwt_secret\":\\n            import logging\\n            log = logging.getLogger(__name__)\\n            log.info(f\"DEBUG: [AIRFLOW_CONF] jwt_secret: {self.get_raw(section, key)}\")" \
+    "${AIRFLOW_SITE_PACKAGES}/configuration.py"
+
 echo "Starting Airflow scheduler..."
 airflow scheduler &
 
