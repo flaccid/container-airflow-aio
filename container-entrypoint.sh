@@ -111,11 +111,12 @@ fi
 # Re-enable ProxyFix to rely on X-Forwarded-* headers from the proxy chain.
 export AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=True
 # AIRFLOW__WEBSERVER__BASE_URL is used by the UI to set the <base href> tag.
-# We will rely on X-Forwarded-Prefix being passed to Airflow via Istio/KubeFlow.
 export AIRFLOW__WEBSERVER__BASE_URL=${AIRFLOW__WEBSERVER__BASE_URL:-http://localhost:8080}
 # AIRFLOW__API__BASE_URL: for Airflow 3, this also determines the root_path for the FastAPI application.
-# Set it to the internal root, as X-Forwarded-Prefix should handle the external path.
-export AIRFLOW__API__BASE_URL="/"
+# When running behind a path-stripping reverse proxy (e.g. code-server /proxy/<port>/),
+# this must remain "/" so that route matching works on the raw incoming request paths.
+# The UI <base href> is handled separately via template patching below.
+export AIRFLOW__API__BASE_URL="${AIRFLOW__API__BASE_URL:-/}"
 
 # --- JWT Authentication Configuration ---
 # Fixes "JWT token is not valid: The specified alg value is not allowed"
@@ -131,6 +132,66 @@ AIRFLOW_SITE_PACKAGES=$(python3 -c "import airflow; import os; print(os.path.dir
 
 sed -i "/def get(self, section: str, key: str, *, fallback: T = settings.SENTRY_DSN_SENTINEL, var_name: str | None = None, suppress_warnings: bool = False) -> T:/a \\        if section == \"api_auth\" and key == \"jwt_algorithm\":\\n            import logging\\n            log = logging.getLogger(__name__)\\n            log.info(f\"DEBUG: [AIRFLOW_CONF] jwt_algorithm: {self.get_raw(section, key)}\")\\n        if section == \"api_auth\" and key == \"jwt_secret\":\\n            import logging\\n            log = logging.getLogger(__name__)\\n            log.info(f\"DEBUG: [AIRFLOW_CONF] jwt_secret: {self.get_raw(section, key)}\")" \
     "${AIRFLOW_SITE_PACKAGES}/configuration.py"
+
+# --- UI PROXY PATH PATCHING ---
+# When running behind a path-stripping reverse proxy (e.g. Kubeflow notebook code-server),
+# the Airflow UI needs its <base href> set to the external proxy path so that relative
+# asset URLs resolve correctly in the browser.
+#
+# AIRFLOW_UI_BASE_PATH: set this to the external URL path prefix that the browser uses
+# to reach this Airflow instance (e.g. "/notebook/ns/name/proxy/8080/").
+# When set, the UI templates are patched and auto-authentication is injected.
+AIRFLOW_UI_BASE_PATH="${AIRFLOW_UI_BASE_PATH:-}"
+
+if [ -n "$AIRFLOW_UI_BASE_PATH" ]; then
+    # Ensure the path ends with a trailing slash
+    [[ "$AIRFLOW_UI_BASE_PATH" != */ ]] && AIRFLOW_UI_BASE_PATH="${AIRFLOW_UI_BASE_PATH}/"
+
+    echo "Patching Airflow UI templates for proxy base path: ${AIRFLOW_UI_BASE_PATH}"
+    AIRFLOW_SITE_PACKAGES_DIR=$(python3 -c "import airflow; import os; print(os.path.dirname(airflow.__file__))")
+
+    UI_DIST_DIR="${AIRFLOW_SITE_PACKAGES_DIR}/ui/dist"
+    AUTH_DIST_DIR="${AIRFLOW_SITE_PACKAGES_DIR}/api_fastapi/auth/managers/simple/ui/dist"
+
+    # Patch <base href> in the main UI template
+    if [ -f "${UI_DIST_DIR}/index.html" ]; then
+        sed -i "s|<base href=\"{{ backend_server_base_url }}\" />|<base href=\"${AIRFLOW_UI_BASE_PATH}\" />|" \
+            "${UI_DIST_DIR}/index.html"
+
+        # When using simple_auth_manager_all_admins mode, inject auto-auth script
+        # so the browser gets a JWT cookie without needing a redirect-based login flow
+        # (redirect-based login breaks behind path-stripping proxies).
+        if [ "${AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS:-false}" = "True" ] || \
+           [ "${AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS:-false}" = "true" ]; then
+            sed -i '/<\/title>/a\    <script>\
+      (async function() {\
+        if (!document.cookie.includes("_token=")) {\
+          try {\
+            const r = await fetch("./auth/token", {\
+              method: "POST",\
+              headers: {"Content-Type": "application/x-www-form-urlencoded"},\
+              body: "username=Anonymous\\&password="\
+            });\
+            if (r.ok) {\
+              const d = await r.json();\
+              document.cookie = "_token=" + d.access_token + "; path=/; SameSite=Lax";\
+              window.location.reload();\
+            }\
+          } catch(e) { console.error("Auto-auth failed:", e); }\
+        }\
+      })();\
+    </script>' "${UI_DIST_DIR}/index.html"
+        fi
+    fi
+
+    # Patch <base href> in the auth manager login template
+    if [ -f "${AUTH_DIST_DIR}/index.html" ]; then
+        sed -i "s|<base href=\"{{ backend_server_base_url }}\" />|<base href=\"${AIRFLOW_UI_BASE_PATH}\" />|" \
+            "${AUTH_DIST_DIR}/index.html"
+    fi
+
+    echo "UI templates patched successfully."
+fi
 
 echo "Starting Airflow scheduler..."
 airflow scheduler &
